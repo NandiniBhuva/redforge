@@ -119,79 +119,64 @@ def get_all_attacks(category: Optional[str] = None):
 
 
 @app.post("/api/scan")
-async def run_scan(
+def run_scan(
     request: ScanRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db)
 ):
-    """
-    Main scan endpoint. Runs a full prompt injection scan.
+    if not os.environ.get("GROQ_API_KEY"):
+        raise HTTPException(status_code=500, detail="GROQ_API_KEY not configured")
 
-    This is the most complex endpoint:
-    1. Validates request
-    2. Runs scan in background (so frontend gets immediate response)
-    3. Returns scan_id so frontend can poll for results
-    """
-
-    # Validate categories
     valid_categories = list(CATEGORIES.keys())
     for cat in request.categories:
         if cat not in valid_categories:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Invalid category: {cat}. Valid: {valid_categories}"
-            )
+            raise HTTPException(status_code=400, detail=f"Invalid category: {cat}")
 
-    # Validate scenario
-    if request.scenario not in SYSTEM_PROMPTS and not request.custom_system_prompt:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid scenario: {request.scenario}"
-        )
-
-    # Check Groq API key
-    if not os.environ.get("GROQ_API_KEY"):
-        raise HTTPException(
-            status_code=500,
-            detail="GROQ_API_KEY not configured"
-        )
-
-    # Run the full scan
     try:
         scan_results = {}
         all_results = []
         category_scores = {}
 
         for category in request.categories:
-            # Get attacks for this category
             attacks = get_attacks_by_category(category)
 
-            # Generate mutations if requested
             if request.use_mutations:
                 attacks = generate_mutations_for_category(
                     attacks,
                     num_mutations=request.num_mutations
                 )
 
-            # Run the attacks
             category_result = run_category_scan(
                 attacks=attacks,
                 scenario=request.scenario,
                 custom_system_prompt=request.custom_system_prompt
             )
 
+            clean_results = []
+            for r in category_result["results"]:
+                clean_results.append({
+                    "attack_id": str(r.get("attack_id", "")),
+                    "parent_id": str(r.get("parent_id", "")) if r.get("parent_id") else None,
+                    "name": str(r.get("name", "")),
+                    "category": str(r.get("category", "")),
+                    "severity": str(r.get("severity", "")),
+                    "strategy": str(r.get("strategy", "original")),
+                    "prompt": str(r.get("prompt", "")),
+                    "response": str(r.get("response", "")) if r.get("response") else None,
+                    "success": bool(r.get("success", False)),
+                    "confidence": int(r.get("confidence", 0)),
+                    "matched_indicators": r.get("matched_indicators", []),
+                    "reasoning": str(r.get("reasoning", "")),
+                    "elapsed_seconds": float(r.get("elapsed_seconds", 0)),
+                    "error": str(r.get("error", "")) if r.get("error") else None
+                })
+
+            category_result["results"] = clean_results
             scan_results[category] = category_result
-            all_results.extend(category_result["results"])
+            all_results.extend(clean_results)
+            category_scores[category] = calculate_category_score(clean_results)
 
-            # Score this category
-            category_scores[category] = calculate_category_score(
-                category_result["results"]
-            )
-
-        # Calculate overall score
         overall_score = calculate_overall_score(category_scores)
 
-        # AI analysis
         ai_analysis = analyze_scan_results(
             scan_results=scan_results,
             overall_score=overall_score,
@@ -199,7 +184,6 @@ async def run_scan(
             scenario=request.scenario
         )
 
-        # Save to database
         scan_data = {
             "scenario": request.scenario,
             "categories": request.categories,
@@ -230,6 +214,8 @@ async def run_scan(
         }
 
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 
