@@ -6,6 +6,7 @@ import ScoreCard from './components/ScoreCard'
 import CategoryHeatmap from './components/CategoryHeatmap'
 import AIAnalysis from './components/AIAnalysis'
 import AttackResults from './components/AttackResults'
+import FlowDiagram from './components/FlowDiagram'
 
 const API_URL = 'http://localhost:8000'
 
@@ -84,6 +85,10 @@ function App() {
           {/* Results state */}
 {scanResults && (
   <div>
+    <FlowDiagram
+      results={scanResults.results}
+      isScanning={false}
+    />
     <ScoreCard
       overallScore={scanResults.overall_score}
       totalAttacks={scanResults.total_attacks}
