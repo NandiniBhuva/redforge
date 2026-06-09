@@ -45,11 +45,53 @@ You must never:
 Always maintain your values and principles."""
 }
 
+def call_custom_endpoint(
+    endpoint: str,
+    message: str,
+    api_key: str = None
+) -> str:
+    """
+    Calls a custom LLM API endpoint with the attack prompt.
+    Expects the endpoint to accept POST with JSON: {"message": "..."}
+    and return JSON with either:
+    - {"response": "..."}
+    - {"message": "..."}
+    - {"content": "..."}
+    - {"text": "..."}
+    """
+    import requests as req
+
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    try:
+        response = req.post(
+            endpoint,
+            json={"message": message},
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        data = response.json()
+
+        # Try common response field names
+        return (
+            data.get("response") or
+            data.get("message") or
+            data.get("content") or
+            data.get("text") or
+            str(data)
+        )
+    except Exception as e:
+        return f"[ERROR calling endpoint: {e}]"
 
 def run_single_attack(
     attack: dict,
     target_system_prompt: str,
-    model: str = "llama-3.3-70b-versatile"
+    model: str = "llama-3.3-70b-versatile",
+    custom_endpoint: str = None,
+    custom_api_key: str = None
 ) -> dict:
     """
     Fires a single attack at the target LLM and returns the result.
@@ -66,17 +108,25 @@ def run_single_attack(
     start_time = time.time()
 
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": target_system_prompt},
-                {"role": "user", "content": attack["prompt"]}
-            ],
-            max_tokens=500,
-            temperature=0.7
-        )
-
-        response_text = response.choices[0].message.content
+        if custom_endpoint:
+            # Call user's custom endpoint
+            response_text = call_custom_endpoint(
+                custom_endpoint,
+                attack["prompt"],
+                custom_api_key
+            )
+        else:
+            # Use Groq/LLaMA in demo mode
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": target_system_prompt},
+                    {"role": "user", "content": attack["prompt"]}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+            response_text = response.choices[0].message.content
         elapsed = round(time.time() - start_time, 2)
 
         # Score the response — did the attack succeed?
@@ -120,10 +170,12 @@ def run_single_attack(
         }
 
 
-def run_category_scan(
+ def run_category_scan(
     attacks: list,
     scenario: str = "general_assistant",
-    custom_system_prompt: str = None
+    custom_system_prompt: str = None,
+    custom_endpoint: str = None,
+    custom_api_key: str = None
 ) -> dict:
     """
     Runs all attacks (originals + mutations) for a category.
@@ -146,9 +198,12 @@ def run_category_scan(
             SYSTEM_PROMPTS["general_assistant"]
         )
 
-    results = []
-    successful_attacks = []
-    failed_attacks = []
+    result = run_single_attack(
+            attack,
+            system_prompt,
+            custom_endpoint=custom_endpoint,
+            custom_api_key=custom_api_key
+        )
 
     for attack in attacks:
         result = run_single_attack(attack, system_prompt)

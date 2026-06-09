@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 
+
 // Available deployment scenarios
 const SCENARIOS = [
   { id: 'general_assistant', label: 'General Assistant' },
@@ -33,6 +34,10 @@ function ScanConfig({ onScanStart, isScanning, scanHistory }) {
   // State for advanced options
   const [useMutations, setUseMutations] = useState(true)
   const [numMutations, setNumMutations] = useState(1)
+   
+  const [targetMode, setTargetMode] = useState('demo')
+const [customEndpoint, setCustomEndpoint] = useState('')
+const [customApiKey, setCustomApiKey] = useState('')
 
   // Toggle a category on/off
   const toggleCategory = (categoryId) => {
@@ -54,14 +59,17 @@ function ScanConfig({ onScanStart, isScanning, scanHistory }) {
 
   // Handle scan launch
   const handleScan = () => {
-    if (selectedCategories.length === 0) return
-    onScanStart({
-      scenario,
-      categories: selectedCategories,
-      use_mutations: useMutations,
-      num_mutations: numMutations
-    })
-  }
+  if (selectedCategories.length === 0) return
+  onScanStart({
+    scenario,
+    categories: selectedCategories,
+    use_mutations: useMutations,
+    num_mutations: numMutations,
+    target_mode: targetMode,
+    custom_endpoint: targetMode === 'custom' ? customEndpoint : null,
+    custom_api_key: targetMode === 'custom' ? customApiKey : null,
+  })
+}
 
   return (
     <div className="w-72 min-h-screen bg-gray-900 border-r border-gray-800 flex flex-col">
@@ -169,6 +177,65 @@ function ScanConfig({ onScanStart, isScanning, scanHistory }) {
           </div>
         )}
       </div>
+
+      {/* Custom Endpoint */}
+<div className="p-4 border-b border-gray-800">
+  <h2 className="text-gray-400 text-xs font-semibold uppercase tracking-wider mb-3">
+    Target
+  </h2>
+
+  <div className="space-y-3">
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="radio"
+        name="target"
+        value="demo"
+        checked={targetMode === 'demo'}
+        onChange={() => setTargetMode('demo')}
+        className="accent-red-500"
+      />
+      <span className={`text-sm ${targetMode === 'demo' ? 'text-white' : 'text-gray-400'}`}>
+        Demo mode (LLaMA 3.3)
+      </span>
+    </label>
+
+    <label className="flex items-center gap-2 cursor-pointer">
+      <input
+        type="radio"
+        name="target"
+        value="custom"
+        checked={targetMode === 'custom'}
+        onChange={() => setTargetMode('custom')}
+        className="accent-red-500"
+      />
+      <span className={`text-sm ${targetMode === 'custom' ? 'text-white' : 'text-gray-400'}`}>
+        Custom endpoint
+      </span>
+    </label>
+
+    {targetMode === 'custom' && (
+      <div className="space-y-2 mt-2">
+        <input
+          type="text"
+          placeholder="https://your-api.com/chat"
+          value={customEndpoint}
+          onChange={e => setCustomEndpoint(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+        />
+        <input
+          type="password"
+          placeholder="API key (optional)"
+          value={customApiKey}
+          onChange={e => setCustomApiKey(e.target.value)}
+          className="w-full bg-gray-800 border border-gray-700 rounded px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-red-500"
+        />
+        <p className="text-gray-600 text-xs">
+          Endpoint must accept POST with JSON body: {`{"message": "..."}`}
+        </p>
+      </div>
+    )}
+  </div>
+</div>
 
       {/* Launch Button */}
       <div className="p-4">

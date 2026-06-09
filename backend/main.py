@@ -44,12 +44,14 @@ app.add_middleware(
 # Pydantic validates everything automatically
 
 class ScanRequest(BaseModel):
-    """What the frontend sends when requesting a scan."""
-    categories: List[str]           # which attack categories to test
-    scenario: str = "general_assistant"  # which system prompt to use
-    custom_system_prompt: Optional[str] = None  # user's own system prompt
-    use_mutations: bool = True      # whether to generate mutations
-    num_mutations: int = 5          # how many mutations per attack
+    categories: List[str]
+    scenario: str = "general_assistant"
+    custom_system_prompt: Optional[str] = None
+    use_mutations: bool = True
+    num_mutations: int = 5
+    target_mode: str = "demo"
+    custom_endpoint: Optional[str] = None
+    custom_api_key: Optional[str] = None      # how many mutations per attack
 
 
 class ScanResponse(BaseModel):
@@ -146,10 +148,12 @@ def run_scan(
                 )
 
             category_result = run_category_scan(
-                attacks=attacks,
-                scenario=request.scenario,
-                custom_system_prompt=request.custom_system_prompt
-            )
+    attacks=attacks,
+    scenario=request.scenario,
+    custom_system_prompt=request.custom_system_prompt,
+    custom_endpoint=request.custom_endpoint if request.target_mode == 'custom' else None,
+    custom_api_key=request.custom_api_key if request.target_mode == 'custom' else None
+)
 
             clean_results = []
             for r in category_result["results"]:
